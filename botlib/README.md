@@ -17,7 +17,17 @@ from botlib.tgclient import TGClient
 
 ## Cli, DirType
 
-TODO
+A wrapper around `argparse`. Shorter calls for common parameters.
+If `.arg_dir()` is not enough, use `DirType` for existing directory params.
+
+```py
+cli = Cli()
+cli.arg_dir('dest_dir', help='...')
+cli.arg_file('FILE', help='...')
+cli.arg_bool('--dry-run', help='...')
+cli.arg('source', help='...')
+args = cli.parse()
+```
 
 
 
@@ -54,42 +64,74 @@ Includes an etag / last-modified check to reduce network load.
 ```py
 # for these 3 calls, create a download connection just once.
 # the result is stored in cache/curl-example.org-1234..ABC.data
-Curl.get('https://example.org')
+Curl.get('https://example.org', cache_only=False)
 Curl.get('https://example.org')
 Curl.get('https://example.org')
 # if the URL path is different, the content is downloaded into another file
 Curl.get('https://example.org?1')
 # download files
 Curl.file('https://example.org/image.png', './example-image.png')
+# ... or json
+Curl.json('https://example.org/data.json', fallback={})
 # ... or just open a connection
 with Curl.open('https://example.org') as wp:
     wp.read()
 ```
 
-There is also an easy-getter to download files only if they do not appear locally.
+There is also an easy-getter to download multiple files if they were not already.
 
 ```py
 Curl.once('./dest/dir/', 'filename', [
     'https://example.org/audio.mp3',
     'https://example.org/image.jpg'
-], date, desc='my super long description')
+], date)
 ```
 
 This will check whether `./dest/dir/filename.mp3` and `./dest/dir/filename.jpg` exists – and if not, download them.
-It will also put the content of desc in `./dest/dir/filename.txt` (again, only if the file does not exist yet).
-All file modification dates will be set to `date`.
+All file modification dates will be set to `date` (if set).
 
 
 
 ## Feed2List
 
-TODO
+Parse RSS or Atom xml and return list. Similar to `HTML2list`.
+
+```py
+for entry in reversed(Feed2List(fp, keys=[
+    'link', 'title', 'description', 'enclosure',  # audio
+    'pubDate', 'media:content',  # image
+    # 'itunes:image', 'itunes:duration', 'itunes:summary'
+])):
+    date = entry.get('pubDate')
+    process_entry(entry, date)
+```
 
 
 
-## Log, FileTime, StrFormat
+## Log, FileTime, StrFormat, FileWrite
 
-TODO
+A few tools that may be helpful.
+
+- `Log.error` and `Log.info` will just print a message (including the current timestamp) to the console.
+- `FileTime.get` and `FileTime.set` reads and writes file times, e.g., set the date to the same time when a podcast episode was released.
+- `StrFormat` has:
+  - `.strip_html()` make plain text from html
+  - `.to_date()`: convert string to date
+  - `.safe_filename()`: strips all filesystem-unsafe characters
+
+`FileWrite.once` works exactly the same way as `Curl.once` does.
+The only difference is that `FileWrite` accepts just one filename and requires a callback method:
+
+```py
+@FileWrite.once(dest_dir, 'description.txt', date, overwrite=False)
+def _fn():
+    desc = title + '\n' + '=' * len(title)
+    desc += '\n\n' + StrFormat.strip_html(entry.get('description', ''))
+    return desc + '\n\n\n' + entry.get('link', '') + '\n'
+```
+
+The callback `_fn` is only called if the file does not exist yet.
+This avoids unnecessary processing in repeated calls.
 
 
 
