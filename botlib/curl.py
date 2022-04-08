@@ -105,7 +105,7 @@ class Curl:
             return False
 
     @staticmethod
-    def once(dest_dir, fname, urllist, date, desc=None, *,
+    def once(dest_dir, fname, urllist, date=None, *,
              override=False, dry_run=False, verbose=False, intro=''):
         did_update = False
         for url_str in urllist:
@@ -116,22 +116,14 @@ class Curl:
             ext = parts.path.split('.')[-1] or 'unknown'
             file_path = os.path.join(dest_dir, fname + '.' + ext)
             if override or not os.path.isfile(file_path):
-                if not did_update and verbose and intro:
-                    print(intro)
-                did_update = True
+                url = parts.geturl()
                 if verbose:
-                    print('  GET', parts.geturl())
-                if not dry_run:
-                    Curl.file(parts.geturl(), file_path, raise_except=True)
-                    FileTime.set(file_path, date)
-        if desc:
-            desc_path = os.path.join(dest_dir, fname + '.txt')
-            if override or not os.path.isfile(desc_path):
+                    if not did_update and intro:
+                        print(intro)
+                    print('  GET', url)
                 did_update = True
-                if verbose:
-                    print('  –>', desc_path)
                 if not dry_run:
-                    with open(desc_path, 'w') as f:
-                        f.write(desc)
-                    FileTime.set(desc_path, date)
+                    Curl.file(url, file_path, raise_except=True)
+                    if date:
+                        FileTime.set(file_path, date)
         return did_update

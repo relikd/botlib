@@ -71,3 +71,28 @@ class StrFormat:
         text = text.replace('̈', 'e')  # replace umlauts e.g., Ä -> Ae
         text = text.encode('ASCII', 'ignore')
         return ''.join(chr(c) for c in text if chr(c) in StrFormat.fnameChars)
+
+
+class FileWrite:
+    @staticmethod
+    def once(dest_dir, fname, date=None, *,
+             override=False, dry_run=False, verbose=False, intro=''):
+        def _decorator(func):
+            path = os.path.join(dest_dir, fname)
+            if os.path.isfile(path) and not override:
+                return
+            content = func()
+            if not content:
+                return
+            if verbose:
+                if intro and not isinstance(intro, bool):
+                    print(intro)
+                print('  –>', path)
+            if dry_run:
+                return
+            # write file
+            with open(path, 'w') as f:
+                f.write(content)
+            if date:
+                FileTime.set(path, date)
+        return _decorator

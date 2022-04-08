@@ -7,7 +7,7 @@ from botlib.cli import Cli, DirType
 from botlib.cron import Cron
 from botlib.curl import Curl
 from botlib.feed2list import Feed2List
-from botlib.helper import Log, FileTime, StrFormat
+from botlib.helper import Log, FileTime, StrFormat, FileWrite
 from botlib.html2list import HTML2List, MatchGroup
 from botlib.oncedb import OnceDB
 from botlib.tgclient import TGClient
