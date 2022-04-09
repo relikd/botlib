@@ -2,19 +2,26 @@
 from botlib.curl import Curl
 from botlib.html2list import HTML2List, MatchGroup
 from botlib.oncedb import OnceDB
+from typing import Optional, Callable, TextIO
 
 CRAIGSLIST = 'https://newyork.craigslist.org/search/boo'
 
 
-def load(url):
+def load(url: str) -> Optional[TextIO]:
     # return open('test.html')
     return Curl.get(url)
 
 
-def download():
+def download() -> None:
     db = OnceDB('cache.sqlite')
 
-    def proc(cohort, source, select, regex={}, fn=str):
+    def proc(
+        cohort: str,
+        source: Optional[TextIO],
+        select: str,
+        regex: dict = {},
+        fn: Callable[[MatchGroup], str] = str
+    ) -> None:
         match = MatchGroup(regex)
         for elem in reversed(HTML2List(select).parse(source)):
             match.set_html(elem)

@@ -4,46 +4,53 @@ import json
 from sys import stderr
 from hashlib import md5
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, ParseResult
 from urllib.request import urlretrieve, urlopen, Request
+from typing import List, Dict, Optional, Any, TextIO
+from datetime import datetime  # typing
+from http.client import HTTPResponse  # typing
 from .helper import FileTime
 import ssl
 # somehow macOS default behavior for SSL verification is broken
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-def _read_modified_header(fname: str):  # dict or None
-    if not os.path.isfile(fname):
-        return None
+def _read_modified_header(fname: str) -> Dict[str, str]:
+    ''' Extract Etag and Last-Modified headers, rename for sending. '''
     res = {}
-    with open(fname) as fp:
-        head = dict(x.strip().split(': ', 1) for x in fp.readlines())
-        etag = head.get('Etag')
-        if etag:
-            res['If-None-Match'] = etag
-        lastmod = head.get('Last-Modified')
-        if lastmod:
-            res['If-Modified-Since'] = lastmod.replace('-gzip', '')
-    return res or None
+    if os.path.isfile(fname):
+        with open(fname) as fp:
+            for line in fp.readlines():
+                key, val = line.strip().split(': ', 1)
+                if key == 'Etag' and val:
+                    res['If-None-Match'] = val
+                elif key == 'Last-Modified' and val:
+                    res['If-Modified-Since'] = val.replace('-gzip', '')
+    return res
 
 
 class Curl:
+    ''' Rename Curl.CACHE_DIR to move the cache somewhere else. '''
     CACHE_DIR = 'cache'
 
     @staticmethod
-    def valid_url(url):
+    def valid_url(url: str) -> Optional[ParseResult]:
+        ''' If valid, return urlparse() result. '''
         url = url.strip().replace(' ', '+')
         x = urlparse(url)
         return x if x.scheme and x.netloc else None
 
     @staticmethod
-    def url_hash(url) -> str:
+    def url_hash(url: str) -> str:
+        ''' Unique url-hash used for filename / storage. '''
         x = Curl.valid_url(url)
         return '{}-{}'.format(x.hostname if x else 'ERR',
                               md5(url.encode()).hexdigest())
 
     @staticmethod
-    def open(url: str, *, headers={}):  # url-open-pointer or None
+    def open(url: str, *, headers: Optional[Dict[str, str]] = None) \
+            -> Optional[HTTPResponse]:
+        ''' Open a network connection, returl urlopen() result or None. '''
         try:
             head = {'User-Agent': 'Mozilla/5.0'}
             if headers:
@@ -57,7 +64,7 @@ class Curl:
             return None
 
     @staticmethod
-    def get(url: str, *, cache_only=False):  # file-pointer
+    def get(url: str, *, cache_only: bool = False) -> Optional[TextIO]:
         '''
         Returns an already open file pointer.
         You are responsible for closing the file.
@@ -74,17 +81,19 @@ class Curl:
         if conn:
             with open(fname_head, 'w') as fp:
                 fp.write(str(conn.info()).strip())
-            with open(fname, 'wb') as fp:
+            with open(fname, 'wb') as fpb:
                 while True:
                     data = conn.read(8192)  # 1024 Bytes
                     if not data:
                         break
-                    fp.write(data)
-        if os.path.isfile(fname):
-            return open(fname)
+                    fpb.write(data)
+
+        return open(fname) if os.path.isfile(fname) else None
 
     @staticmethod
-    def json(url: str, fallback=None, *, cache_only=False) -> object:
+    def json(url: str, fallback: Any = None, *, cache_only: bool = False) \
+            -> Any:
+        ''' Open network connection and download + parse json result. '''
         conn = Curl.get(url, cache_only=cache_only)
         if not conn:
             return fallback
@@ -92,11 +101,15 @@ class Curl:
             return json.load(fp)
 
     @staticmethod
-    def file(url: str, dest_path: str, *, raise_except=False) -> bool:
-        tmp_file = dest_path + '.inprogress'
+    def file(url: str, dest_file: str, *, raise_except: bool = False) -> bool:
+        '''
+        Download raw data to file. Creates an intermediate ".inprogress" file.
+        If raise_except = False, silently ignore errors (default).
+        '''
+        tmp_file = dest_file + '.inprogress'
         try:
             urlretrieve(url, tmp_file)
-            os.rename(tmp_file, dest_path)  # atomic download, no broken files
+            os.rename(tmp_file, dest_file)  # atomic download, no broken files
             return True
         except HTTPError as e:
             # print('ERROR: Load URL "{}" -- {}'.format(url, e), file=stderr)
@@ -105,8 +118,23 @@ class Curl:
             return False
 
     @staticmethod
-    def once(dest_dir, fname, urllist, date=None, *,
-             override=False, dry_run=False, verbose=False, intro=''):
+    def once(
+        dest_dir: str,
+        fname: str,
+        urllist: List[str],
+        date: Optional[datetime] = None,
+        *, override: bool = False,
+        dry_run: bool = False,
+        verbose: bool = False,
+        intro: Optional[str] = None
+    ) -> bool:
+        '''
+        Download and store a list of raw files. If local file exists, ignore.
+        `fname` should be the filename without extension. Extension is added
+        based on the extension in the `urllist` (per file).
+        If `date` is set, change last modified date of downloaded file.
+        Print `intro` before download (if any loaded or if `override`).
+        '''
         did_update = False
         for url_str in urllist:
             parts = Curl.valid_url(url_str)

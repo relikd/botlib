@@ -17,15 +17,15 @@ bot.set_on_kill(cron.stop)
 
 
 def main():
-    def clean_db(_):
+    def clean_db(_) -> None:
         Log.info('[clean up]')
         OnceDB('cache.sqlite').cleanup(limit=150)
 
-    def notify_jobA(_):
+    def notify_jobA(_) -> None:
         jobA.download(topic='development', cohort='dev:py')
         send2telegram(__A_CHAT_ID__)
 
-    def notify_jobB(_):
+    def notify_jobB(_) -> None:
         jobB.download()
         send2telegram(__ANOTHER_CHAT_ID__)
 
@@ -37,14 +37,15 @@ def main():
     # cron.fire()
 
 
-def send2telegram(chat_id):
+def send2telegram(chat_id: int) -> None:
     db = OnceDB('cache.sqlite')
     # db.mark_all_done()
 
-    def _send(cohort, uid, obj):
+    def _send(cohort: str, uid: str, obj: str) -> bool:
         Log.info('[push] {} {}'.format(cohort, uid))
-        return bot.send(chat_id, obj, parse_mode='HTML',
-                        disable_web_page_preview=True)
+        msg = bot.send(chat_id, obj, parse_mode='HTML',
+                       disable_web_page_preview=True)
+        return msg is not None
 
     if not db.foreach(_send):
         # send() sleeps 45 sec (on error), safe to call immediatelly

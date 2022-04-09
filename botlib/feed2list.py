@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 import xml.etree.ElementTree as ET
+from typing import List, Dict, Any, Optional, Union, TextIO, BinaryIO
 from .helper import StrFormat
 
 
-def Feed2List(fp, *, keys=[]):
-    def parse_xml_without_namespace(file):
+def Feed2List(
+    fp: Optional[Union[TextIO, BinaryIO]],
+    *, keys: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    ''' Parse RSS or Atom feed and return list of entries. '''
+    def parse_without_namespace(file: Union[TextIO, BinaryIO]) -> ET.Element:
         ns = {}
         xml_iter = ET.iterparse(file, ('start-ns', 'start'))
         for event, elem in xml_iter:
@@ -15,8 +20,10 @@ def Feed2List(fp, *, keys=[]):
                 elem.tag = ''.join(ns[x] for x in tag[:-1]) + tag[-1]
         return xml_iter.root
 
+    if not fp:
+        return []
     # detect feed format (RSS / Atom)
-    root = parse_xml_without_namespace(fp)
+    root = parse_without_namespace(fp)
     fp.close()
     if root.tag == 'rss':  # RSS
         selector = 'channel/item'
@@ -30,7 +37,7 @@ def Feed2List(fp, *, keys=[]):
     # parse XML
     result = []
     for item in root.findall(selector):
-        obj = {}
+        obj = {}  # type: Dict[str, Any]
         for child in item:
             tag = child.tag
             # Filter keys that are clearly not wanted by user
@@ -48,9 +55,9 @@ def Feed2List(fp, *, keys=[]):
                 value = attr
             # Auto-create list type if duplicate keys are used
             try:
-                obj[tag]
-                if not isinstance(obj[tag], list):
-                    obj[tag] = [obj[tag]]
+                prev_val = obj[tag]
+                if not isinstance(prev_val, list):
+                    obj[tag] = [prev_val]
                 obj[tag].append(value)
             except KeyError:
                 obj[tag] = value

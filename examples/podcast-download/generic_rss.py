@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 from sys import stderr
+from typing import Dict, Any, Optional, TextIO
+from datetime import datetime  # typing
 
 from botlib.cli import Cli
 from botlib.curl import Curl
@@ -8,7 +10,8 @@ from botlib.feed2list import Feed2List
 from botlib.helper import StrFormat, FileWrite
 
 
-def main():
+def main() -> None:
+    ''' CLI entry. '''
     cli = Cli()
     cli.arg_dir('dest_dir', help='Download all entries here')
     cli.arg('source', help='RSS file or web-url')
@@ -25,10 +28,16 @@ def main():
         print('ERROR: ' + str(e), file=stderr)
 
 
-def process(source, dest_dir, *, by_year=False, dry_run=False):
+def process(
+    source: str,  # local file path or remote url
+    dest_dir: str,
+    *, by_year: bool = False,
+    dry_run: bool = False
+) -> bool:
+    ''' Parse a full podcast file / source. '''
     # open source
     if os.path.isfile(source):
-        fp = open(source)  # closed in Feed2List
+        fp = open(source)  # type: Optional[TextIO] # closed in Feed2List
     elif Curl.valid_url(source):
         fp = Curl.get(source)  # closed in Feed2List
     else:
@@ -41,7 +50,7 @@ def process(source, dest_dir, *, by_year=False, dry_run=False):
         'pubDate', 'media:content',  # image
         # 'itunes:image', 'itunes:duration', 'itunes:summary'
     ])):
-        date = entry.get('pubDate')  # try RSS only
+        date = entry['pubDate']  # try RSS only # type: datetime
         if by_year:
             dest = os.path.join(dest_dir, str(date.year))
             if not dry_run and not os.path.exists(dest):
@@ -50,7 +59,13 @@ def process(source, dest_dir, *, by_year=False, dry_run=False):
     return True
 
 
-def process_entry(entry, date, dest_dir, *, dry_run=False):
+def process_entry(
+    entry: Dict[str, Any],
+    date: datetime,
+    dest_dir: str,
+    *, dry_run: bool = False
+) -> None:
+    ''' Parse a single podcast media entry. '''
     title = entry['title']
     # <enclosure url="*.mp3" length="47216000" type="audio/mpeg"/>
     audio_url = entry.get('enclosure', {}).get('url')
@@ -78,10 +93,11 @@ def process_entry(entry, date, dest_dir, *, dry_run=False):
 
     @FileWrite.once(dest_dir, fname + '.txt', date, override=False,
                     dry_run=dry_run, verbose=True, intro=flag or intro)
-    def _description():
-        desc = title + '\n' + '=' * len(title)
-        desc += '\n\n' + StrFormat.strip_html(entry.get('description', ''))
-        return desc + '\n\n\n' + entry.get('link', '') + '\n'
+    def _description() -> str:
+        return '{}\n{}\n\n{}\n\n\n{}\n'.format(
+            title, '=' * len(title),
+            StrFormat.strip_html(entry.get('description', '')),
+            entry.get('link', ''))
 
 
 if __name__ == '__main__':

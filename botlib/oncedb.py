@@ -9,10 +9,13 @@ Usage: Load existing `OnceDB()` and `put(cohort, uid, obj)` new entries.
        Once in a while call `cleanup()` to remove old entries.
 '''
 import sqlite3
+from typing import Tuple, Any, Callable, Iterator
+
+DBEntry = Tuple[int, str, str, Any]
 
 
 class OnceDB:
-    def __init__(self, db_path):
+    def __init__(self, db_path: str) -> None:
         self._db = sqlite3.connect(db_path)
         self._db.execute('''
             CREATE TABLE IF NOT EXISTS queue(
@@ -24,10 +27,10 @@ class OnceDB:
             );
         ''')
 
-    def __del__(self):
+    def __del__(self) -> None:
         self._db.close()
 
-    def cleanup(self, limit=200):
+    def cleanup(self, limit: int = 200) -> None:
         ''' Delete oldest (cohort) entries if more than limit exist. '''
         self._db.execute('''
             WITH _tmp AS (
@@ -41,7 +44,7 @@ class OnceDB:
         ''', (limit,))
         self._db.commit()
 
-    def put(self, cohort, uid, obj):
+    def put(self, cohort: str, uid: str, obj: str) -> bool:
         ''' Silently ignore if a duplicate (cohort, uid) is added. '''
         try:
             self._db.execute('''
@@ -53,7 +56,8 @@ class OnceDB:
             # entry (cohort, uid) already exists
             return False
 
-    def contains(self, cohort, uid):
+    def contains(self, cohort: str, uid: str) -> bool:
+        ''' Test if cohort + uid pair exists in database. '''
         cur = self._db.cursor()
         cur.execute('''
             SELECT 1 FROM queue WHERE cohort IS ? AND uid is ? LIMIT 1;
@@ -62,7 +66,7 @@ class OnceDB:
         cur.close()
         return flag
 
-    def mark_done(self, rowid):
+    def mark_done(self, rowid: int) -> None:
         ''' Mark (ROWID) as done. Entry remains in cache until cleanup(). '''
         if not isinstance(rowid, int):
             raise AttributeError('Not of type ROWID: {}'.format(rowid))
@@ -70,12 +74,16 @@ class OnceDB:
                          (rowid, ))
         self._db.commit()
 
-    def mark_all_done(self):
+    def mark_all_done(self) -> None:
         ''' Mark all entries done. Entry remains in cache until cleanup(). '''
         self._db.execute('UPDATE queue SET obj = NULL;')
         self._db.commit()
 
-    def foreach(self, callback, *, reverse=False):
+    def foreach(
+        self,
+        callback: Callable[[str, str, Any], bool],
+        *, reverse: bool = False
+    ) -> bool:
         '''
         Exec for all until callback evaluates to false (or end of list).
         Automatically marks entries as done (only on success).
@@ -87,16 +95,19 @@ class OnceDB:
                 return False
         return True
 
-    def __iter__(self, *, reverse=False):
+    def __iter__(self) -> Iterator[DBEntry]:
+        return self.iter()
+
+    def __reversed__(self) -> Iterator[DBEntry]:
+        return self.iter(desc=True)
+
+    def iter(self, *, desc: bool = False) -> Iterator[DBEntry]:
         ''' Perform query on all un-marked / not-done entries. '''
         cur = self._db.cursor()
         cur.execute('''
             SELECT ROWID, cohort, uid, obj FROM queue
             WHERE obj IS NOT NULL
             ORDER BY ROWID {};
-        '''.format('DESC' if reverse else 'ASC'))
+        '''.format('DESC' if desc else 'ASC'))
         yield from cur.fetchall()
         cur.close()
-
-    def __reversed__(self):
-        return self.__iter__(reverse=True)

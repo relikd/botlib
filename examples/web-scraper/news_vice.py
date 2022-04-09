@@ -4,7 +4,7 @@ from botlib.html2list import HTML2List, MatchGroup
 from botlib.oncedb import OnceDB
 
 
-def download(*, topic='motherboard', cohort='vice:motherboard'):
+def download(*, topic: str = 'motherboard', cohort: str = 'vice:mb') -> None:
     db = OnceDB('cache.sqlite')
     url = 'https://www.vice.com/en/topic/{}'.format(topic)
 

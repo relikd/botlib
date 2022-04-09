@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 from sys import stderr
+from typing import Dict, Tuple, Optional, Any
 
 from botlib.cli import Cli
 from botlib.curl import Curl, URLError
@@ -15,7 +16,8 @@ db_slugs = OnceDB('radiolab_slugs.sqlite')
 os.environ['TZ'] = 'America/New_York'
 
 
-def main():
+def main() -> None:
+    ''' CLI entry. '''
     cli = Cli()
     cli.arg_dir('dest_dir', help='Download all episodes to dest_dir/year/')
     cli.arg_bool('--dry-run', help='Do not download, just parse')
@@ -36,9 +38,17 @@ def main():
     print('\nDone.\n\nNow check MP3 tags (consistency).')
 
 
-def processEpisodeList(basedir, title, query, index=1, *, dry_run=False):
+def processEpisodeList(
+    basedir: str,
+    title: str,
+    query: str,
+    index: int = 1,
+    *, dry_run: bool = False
+) -> None:
+    ''' Parse full podcast category. '''
     print('\nProcessing: {}'.format(title), end='')
-    dat = Curl.json('{}/channel/shows/{}/{}?limit=9'.format(API, query, index))
+    url = '{}/channel/shows/{}/{}?limit=9'.format(API, query, index)
+    dat = Curl.json(url)  # type: Dict[str, Any]
     total = dat['data']['attributes']['total-pages']
     print(' ({}/{})'.format(index, total))
     anything_new = False
@@ -49,7 +59,12 @@ def processEpisodeList(basedir, title, query, index=1, *, dry_run=False):
         processEpisodeList(basedir, title, query, index + 1, dry_run=dry_run)
 
 
-def processEpisode(obj, basedir, *, dry_run=False):
+def processEpisode(
+    obj: Dict[str, Any],
+    basedir: str,
+    *, dry_run: bool = False
+) -> bool:
+    ''' Parse a single podcast episode. '''
     uid = obj['cms-pk']
     if db_ids.contains(COHORT, uid):
         return False  # Already exists
@@ -86,18 +101,18 @@ def processEpisode(obj, basedir, *, dry_run=False):
 
     @FileWrite.once(dest_dir, fname + '.txt', date, override=False,
                     dry_run=dry_run, verbose=True, intro=flag or intro)
-    def write_description():
+    def write_description() -> str:
         nonlocal flag
         flag = True
-        desc = title + '\n' + '=' * len(title)
-        desc += '\n\n' + StrFormat.strip_html(obj['body'])
+        desc = '{}\n{}\n\n{}'.format(
+            title, '=' * len(title), StrFormat.strip_html(obj['body']))
         if img_desc:
             desc += '\n\n' + img_desc
-        return desc + '\n\n\n' + obj['url'].strip() + '\n'  # link to article
+        return '{}\n\n\n{}\n'.format(desc, obj['url'].strip())  # article link
 
     @FileWrite.once(dest_dir, fname + '.transcript.txt', date, override=False,
                     dry_run=dry_run, verbose=True, intro=flag or intro)
-    def write_transcript():
+    def write_transcript() -> Optional[str]:
         nonlocal flag
         flag = True
         data = StrFormat.strip_html(obj['transcript'])
@@ -111,7 +126,8 @@ def processEpisode(obj, basedir, *, dry_run=False):
     return flag  # potentially need to query the next page too
 
 
-def get_img_desc(obj):
+def get_img_desc(obj: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    ''' Extract image description. '''
     if not obj:
         return (None, None)
     url = (obj['url'] or '').strip()
@@ -135,7 +151,8 @@ def get_img_desc(obj):
 # -> inurl:radiolab/episodes site:wnycstudios.org
 # Then regex:  /episodes/([^;]*?)" onmousedown
 
-def processSingle(slug, basedir):
+def processSingle(slug: str, basedir: str) -> None:
+    ''' [internal] process single episode if only the slug is known. '''
     # cms-pk = 91947 , slug = '91947-do-i-know-you'
     all_slugs = [slug for _, _, _, slug in db_slugs]
     if slug not in all_slugs:

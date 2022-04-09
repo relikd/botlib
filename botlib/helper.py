@@ -7,26 +7,31 @@ from html import unescape
 from datetime import datetime
 import unicodedata  # normalize
 from string import ascii_letters, digits
+from typing import Optional, Callable, Union
 
 
 class Log:
     @staticmethod
-    def error(e):
+    def error(e: str) -> None:
+        ''' Log error message (incl. current timestamp) '''
         print('{} [ERROR] {}'.format(datetime.now(), e), file=stderr)
 
     @staticmethod
-    def info(m):
+    def info(m: str) -> None:
+        ''' Log info message (incl. current timestamp) '''
         print('{} {}'.format(datetime.now(), m))
 
 
 class FileTime:
     @staticmethod
-    def set(fname, date):
+    def set(fname: str, date: datetime) -> None:
+        ''' Set file modification time. '''
         modTime = time.mktime(date.timetuple())
         os.utime(fname, (modTime, modTime))
 
     @staticmethod
-    def get(fname, *, absolute=False):
+    def get(fname: str, *, absolute: bool = False) -> float:
+        ''' Get file modification time. '''
         x = os.path.getmtime(fname)
         return x if absolute else time.time() - x
 
@@ -40,7 +45,11 @@ class StrFormat:
     re_crlf = re.compile(r'[\n\r]{2,}')
 
     @staticmethod
-    def strip_html(text):
+    def strip_html(text: str) -> str:
+        '''
+        Remove all html tags and replace with readble alternative.
+        Also, strips unnecessary newlines, nbsp, br, etc.
+        '''
         text = StrFormat.re_img.sub(r'[IMG: \2, \1\3]', text)
         text = StrFormat.re_href.sub(r'\2 (\1)', text)
         text = StrFormat.re_br.sub('\n', text)
@@ -49,7 +58,8 @@ class StrFormat:
         return unescape(text).replace(' ', ' ').strip()
 
     @staticmethod
-    def to_date(text):
+    def to_date(text: str) -> datetime:
+        ''' Try parse string as date, currently RSS + Atom format. '''
         for date_format in (
             '%a, %d %b %Y %H:%M:%S %z',  # RSS
             '%Y-%m-%dT%H:%M:%S%z',  # Atom
@@ -66,18 +76,31 @@ class StrFormat:
     fnameChars = set('-_.,() {}{}'.format(ascii_letters, digits))
 
     @staticmethod
-    def safe_filename(text):
+    def safe_filename(text: str) -> str:
+        ''' Replace umlauts and unsafe characters (filesystem safe). '''
         text = unicodedata.normalize('NFKD', text)  # makes 2-bytes of umlauts
         text = text.replace('̈', 'e')  # replace umlauts e.g., Ä -> Ae
-        text = text.encode('ASCII', 'ignore')
-        return ''.join(chr(c) for c in text if chr(c) in StrFormat.fnameChars)
+        data = text.encode('ASCII', 'ignore')
+        return ''.join(chr(c) for c in data if chr(c) in StrFormat.fnameChars)
 
 
 class FileWrite:
     @staticmethod
-    def once(dest_dir, fname, date=None, *,
-             override=False, dry_run=False, verbose=False, intro=''):
-        def _decorator(func):
+    def once(
+        dest_dir: str,
+        fname: str,
+        date: Optional[datetime] = None,
+        *, override: bool = False,
+        dry_run: bool = False,
+        verbose: bool = False,
+        intro: Union[str, bool, None] = None
+    ) -> Callable[[Callable[[], Optional[str]]], None]:
+        '''
+        Write file to disk – but only if it does not exist already.
+        The callback method is only called if the file does not exist yet.
+        Use as decorator to a function: @FileWrite.once(...)
+        '''
+        def _decorator(func: Callable[[], Optional[str]]) -> None:
             path = os.path.join(dest_dir, fname)
             if os.path.isfile(path) and not override:
                 return
@@ -85,7 +108,7 @@ class FileWrite:
             if not content:
                 return
             if verbose:
-                if intro and not isinstance(intro, bool):
+                if intro and intro is not True:
                     print(intro)
                 print('  –>', path)
             if dry_run:
