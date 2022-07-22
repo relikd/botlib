@@ -61,6 +61,7 @@ class Cron:
     def add_job(self, interval: int, callback: CronCallback, arg: Any = None) \
             -> Job:
         ''' Create and queue a new job. '''
+        assert callback and callable(callback), 'No Cron callback provided.'
         job = Cron.Job(interval, callback, arg)
         self.push(job)
         return job
