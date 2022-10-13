@@ -11,15 +11,29 @@ from typing import Optional, Callable, Union
 
 
 class Log:
+    FILE = 'error.log'
+    LEVEL = 0  # -1: disabled, 0: error, 1: warn, 2: info, 4: debug
+
+    @staticmethod
+    def _log_if(level: int, msg: str) -> None:
+        ''' Log to file if LOG_LEVEL >= level. '''
+        if Log.LEVEL >= level:
+            with open(Log.FILE, 'a') as fp:
+                fp.write(msg + '\n')
+
     @staticmethod
     def error(e: str) -> None:
         ''' Log error message (incl. current timestamp) '''
-        print('{} [ERROR] {}'.format(datetime.now(), e), file=stderr)
+        msg = '{} [ERROR] {}'.format(datetime.now(), e)
+        print(msg, file=stderr)
+        Log._log_if(0, msg)
 
     @staticmethod
     def info(m: str) -> None:
         ''' Log info message (incl. current timestamp) '''
-        print('{} {}'.format(datetime.now(), m))
+        msg = '{} {}'.format(datetime.now(), m)
+        print(msg)
+        Log._log_if(2, msg)
 
 
 class FileTime:
