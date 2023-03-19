@@ -42,7 +42,7 @@ class TGClient(telebot.TeleBot):
                         self.onKillCallback()
                     return
                 except Exception as e:
-                    Log.error(repr(e))
+                    Log.error(e)
                     Log.info('Auto-restart in 15 sec ...')
                     sleep(15)
                     _fn()
@@ -91,7 +91,7 @@ class TGClient(telebot.TeleBot):
         try:
             return self.send_message(chat_id, msg, **kwargs)
         except Exception as e:
-            Log.error(repr(e))
+            Log.error(e)
             sleep(45)
             return None
 

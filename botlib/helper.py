@@ -2,6 +2,7 @@
 import re
 import os  # utime, getmtime
 import time  # mktime, time
+import traceback  # format_exc
 from sys import stderr
 from html import unescape
 from datetime import datetime
@@ -22,11 +23,14 @@ class Log:
                 fp.write(msg + '\n')
 
     @staticmethod
-    def error(e: str) -> None:
+    def error(e: Union[str, Exception]) -> None:
         ''' Log error message (incl. current timestamp) '''
-        msg = '{} [ERROR] {}'.format(datetime.now(), e)
+        msg = '{} [ERROR] {}'.format(
+            datetime.now(), e if isinstance(e, str) else repr(e))
         print(msg, file=stderr)
         Log._log_if(0, msg)
+        if isinstance(e, Exception):
+            Log._log_if(0, traceback.format_exc())
 
     @staticmethod
     def info(m: str) -> None:
